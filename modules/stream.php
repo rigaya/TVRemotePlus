@@ -201,6 +201,9 @@
 		// UDPポート
 		$stream_port = $udp_port + intval($stream);
 
+		// UDP受信スキーム
+		$receive = "udp://127.0.0.1:{$stream_port}?pkt_size=262144&fifo_size=1000000&overrun_nonfatal=1";
+
 		// 以前の state が ONAir (TSTask を再利用できる)
 		if ($settings[strval($stream)]['state'] === 'ONAir') {
 
@@ -258,7 +261,7 @@
 
 			case 'true':
 				$subtitle_ffmpeg_cmd = '-map 0:d?';
-				$subtitle_other_cmd = '--data-copy timed_id3';
+				$subtitle_other_cmd = '--sub-codec arib_caption?timed_id3:handler=aribb24.js';
 			break;
 
 			case 'false':
@@ -406,6 +409,8 @@
 					// 出力
 					' stream'.$stream.'.m3u8';
 
+				$use_ast = true;
+				$protocol = 'tcp';
 				break;
 
 			case 'QSVEncC':
@@ -414,7 +419,8 @@
 				$stream_cmd = '"'.$qsvencc_path.'"'.
 
 					// 入力
-					' --input-format mpegts --fps 30000/1001 --input-probesize 1000K --input-analyze 0.7 -i -'.
+					' --input-format mpegts --fps 30000/1001 --input-probesize 1000K --input-analyze 0.7'.
+					' -i '.$receive.
 					// avhw エンコード
 					' --avhw'.
 					// HLS
@@ -436,6 +442,8 @@
 					// 出力
 					' -o stream'.$stream.'.m3u8';
 
+				$use_ast = false;
+				$protocol = 'udp';
 				break;
 
 			case 'NVEncC':
@@ -444,7 +452,8 @@
 				$stream_cmd = '"'.$nvencc_path.'"'.
 
 					// 入力
-					' --input-format mpegts --fps 30000/1001 --input-probesize 1000K --input-analyze 0.7 -i -'.
+					' --input-format mpegts --fps 30000/1001 --input-probesize 1000K --input-analyze 0.7'.
+					' -i '.$receive.
 					// avhw エンコード
 					' --avhw'.
 					// HLS
@@ -466,6 +475,8 @@
 					// 出力
 					' -o stream'.$stream.'.m3u8';
 
+				$use_ast = false;
+				$protocol = 'udp';
 				break;
 
 			case 'VCEEncC':
@@ -474,7 +485,8 @@
 				$stream_cmd = '"'.$vceencc_path.'"'.
 
 					// 入力
-					' --input-format mpegts --fps 30000/1001 --input-probesize 1000K --input-analyze 0.7 -i -'.
+					' --input-format mpegts --fps 30000/1001 --input-probesize 1000K --input-analyze 0.7'.
+					' -i '.$receive.
 					// avhw エンコード
 					' --avhw'.
 					// HLS
@@ -496,6 +508,8 @@
 					// 出力
 					' -o stream'.$stream.'.m3u8';
 
+				$use_ast = false;
+				$protocol = 'udp';
 				break;
 		}
 
@@ -508,7 +522,7 @@
 				@unlink($base_dir.'logs/stream'.$stream.'.tstask.log');
 			}
 
-			$tstask_cmd = '"'.$tstask_path.'" '.($TSTask_window == 'true' ? '/xclient' : '/min /xclient-').' /tcp /port '.$stream_port.' /sid '.$sid.' /tsid '.$tsid.
+			$tstask_cmd = '"'.$tstask_path.'" '.($TSTask_window == 'true' ? '/xclient' : '/min /xclient-').' /'.$protocol.' /port '.$stream_port.' /sid '.$sid.' /tsid '.$tsid.
 						' /d '.$BonDriver.' /sendservice 1 /logfile '.$base_dir.'logs/stream'.$stream.'.tstask.log';
 			$tstask_cmd = 'start "TSTask Process" /B /min cmd.exe /C "'.win_exec_escape($tstask_cmd).' & rem TVRP('.$udp_port.'):TSTask('.$stream.')"';
 			win_exec($tstask_cmd);
@@ -522,8 +536,11 @@
 		}
 
 		// エンコードコマンド
-		$stream_cmd = 'start "'.$encoder.' Encoding..." '.($encoder_window == 'true' ? '' : '/B /min').' cmd.exe /C "'.win_exec_escape($ast_cmd).' | '.win_exec_escape($stream_cmd);
-
+		if ($use_ast) {
+			$stream_cmd = 'start "'.$encoder.' Encoding..." '.($encoder_window == 'true' ? '' : '/B /min').' cmd.exe /C "'.win_exec_escape($ast_cmd).' | '.win_exec_escape($stream_cmd);
+		} else {
+			$stream_cmd = 'start "'.$encoder.' Encoding..." '.($encoder_window == 'true' ? '' : '/B /min').' cmd.exe /C "'.win_exec_escape($stream_cmd);
+		}
 		// ログを書き出すかどうか
 		if ($encoder_log == 'true') {
 
@@ -573,7 +590,7 @@
 
 			case 'true':
 				$subtitle_ffmpeg_cmd = '-map 0:d?';
-				$subtitle_other_cmd = '--data-copy timed_id3';
+				$subtitle_other_cmd = '--sub-codec arib_caption?timed_id3:handler=aribb24.js';
 			break;
 
 			case 'false':
@@ -720,6 +737,7 @@
 					// 出力
 					' stream'.$stream.'.m3u8';
 
+				$use_ast = true;
 				break;
 
 			case 'QSVEncC':
@@ -750,6 +768,7 @@
 					// 出力
 					' -o stream'.$stream.'.m3u8';
 
+				$use_ast = false;
 				break;
 
 			case 'NVEncC':
@@ -780,6 +799,7 @@
 					// 出力
 					' -o stream'.$stream.'.m3u8';
 
+				$use_ast = false;
 				break;
 
 			case 'VCEEncC':
@@ -810,11 +830,16 @@
 					// 出力
 					' -o stream'.$stream.'.m3u8';
 
+				$use_ast = false;
 				break;
 		}
 
 		// エンコードコマンド
-		$stream_cmd = 'start "'.$encoder.' Encoding..." '.($encoder_window == 'true' ? '' : '/B /min').' cmd.exe /C "'.win_exec_escape($ast_cmd).' | '.win_exec_escape($stream_cmd);
+		if ($use_ast) {
+			$stream_cmd = 'start "'.$encoder.' Encoding..." '.($encoder_window == 'true' ? '' : '/B /min').' cmd.exe /C "'.win_exec_escape($ast_cmd).' | '.win_exec_escape($stream_cmd);
+		} else {
+			$stream_cmd = 'start "'.$encoder.' Encoding..." '.($encoder_window == 'true' ? '' : '/B /min').' cmd.exe /C "'.win_exec_escape($stream_cmd);
+		}
 
 		// ログを書き出すかどうか
 		if ($encoder_log == 'true') {
